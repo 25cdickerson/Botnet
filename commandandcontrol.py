@@ -11,26 +11,42 @@
 # Object that deals with the buffering of http responses
 import socket
 
-
-class Buffer(object):
-    def __init__(self):
-        self.buf = ""
-
-    def bufferMessages(self, sock):
-        # Parse into buffer
-        while True:
-            chunk = sock.recv(1024).decode()
-            if not chunk:
-                break
-            self.buf += chunk
-
-    def getBuffer(self):
-        return self.buf
+def bufferMessages(sock):
+    finalBuffer = ""
+    # Parse into buffer
+    while True:
+        chunk = sock.recv(1024).decode()
+        if not chunk:
+            break
+        finalBuffer += chunk
     
 def main():
     # Get input
+    inputIPs = input("Enter IPs delimited by a ','" + "\n")
+    ipArray = inputIPs.split(",")
 
-    # Define the socket
-    sock = socket(socket.AF_INET, socket.SOCK_STREAM)
+    ipDictionary = {}
+    for ip in ipArray:
+        inputPorts = input("Enter ports you would like to listen to at IP: " + ip +"\n")
+        portArray = inputPorts.split(",")
+        
+        # Associate IP with ports in the dictionary
+        ipDictionary[ip] = portArray
 
-    #sock.connect((hostname, port))
+    # Iterate through the IP-port dictionary
+    for ip, ports in ipDictionary.items():
+        for port in ports:
+            # Define the socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+            # Connect to each IP and port
+            try:
+                sock.connect((ip, int(port)))
+                print(f"Connected to {ip}:{port}")
+            except Exception as e:
+                print(f"Failed to connect to {ip}:{port}. Error: {e}")
+            finally:
+                # Close the socket after connecting or failing to connect
+                sock.close()
+
+main()
