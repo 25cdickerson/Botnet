@@ -145,10 +145,28 @@ def handleReport(connectionSocket, path, logFile="execution_log.txt"):
     # Send the Response
     connectionSocket.send(response.encode())
 
+def handleStop(connectionSocket, path, processes):
+    path = "./" + path
+    # Iterate over the list of processes and terminate the one associated with the specified path
+    for process in processes:
+        if process.is_alive() and process.name == path:
+            process.terminate()
+            response = "OK\r\nScript terminated successfully\r\n\r\n"
+            try:
+                connectionSocket.send(response.encode())
+            except BrokenPipeError:
+                pass
+            return
 
+    # If no matching process is found, send a response indicating failure
+    response = "FAIL\r\nScript not found or already terminated\r\n\r\n"
+    try:
+        connectionSocket.send(response.encode())
+    except BrokenPipeError:
+        pass
 
 # Runs a single thread response in the server
-def runServerThread(connectionSocket):
+def runServerThread(connectionSocket, processes):
     while True:
         # Buffer the request
         request = bufferRequest(connectionSocket)
@@ -165,8 +183,8 @@ def runServerThread(connectionSocket):
         # If it is a HEAD request, send to handleHead
         elif "REPORT" in method:
             handleReport(connectionSocket, file)
-        # else:
-        #     handleStop(connectionSocket, file, connection)
+        else:
+            handleStop(connectionSocket, file, processes)
 
 def main():
         # Get the command for what we are connecting to, throw an error if there is not command line argument
@@ -199,7 +217,7 @@ def main():
         for s in read:
             connectionSocket, addr = s.accept()
                 
-            p = Process(target=runServerThread, args=(connectionSocket,))
+            p = Process(target=runServerThread, args=(connectionSocket, processes,))
             p.start()
 
             processes.append(p)
