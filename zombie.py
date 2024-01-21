@@ -97,7 +97,7 @@ def handleRun(connectionSocket, path):
         port = localAddress[1]
 
         # Run the file in a new thread
-        p = Process(target=runFile, args=("./" + path, port))
+        p = Process(target=runFile, args=("./" + path, port), name=f"{path}")
         p.start()
         
         # Fill out the response headers
@@ -116,6 +116,8 @@ def handleRun(connectionSocket, path):
     else:
         response = "FAIL\r\nFile not found\r\n\r\n"
         connectionSocket.send(response.encode())
+
+    return p, path
 
 def handleReport(connectionSocket, path, logFile="execution_log.txt"):
     localAddress = connectionSocket.getsockname()
@@ -145,28 +147,36 @@ def handleReport(connectionSocket, path, logFile="execution_log.txt"):
     # Send the Response
     connectionSocket.send(response.encode())
 
-def handleStop(connectionSocket, path, processes):
-    path = "./" + path
-    # Iterate over the list of processes and terminate the one associated with the specified path
-    for process in processes:
-        if process.is_alive() and process.name == path:
-            process.terminate()
-            response = "OK\r\nScript terminated successfully\r\n\r\n"
-            try:
-                connectionSocket.send(response.encode())
-            except BrokenPipeError:
-                pass
-            return
-
-    # If no matching process is found, send a response indicating failure
-    response = "FAIL\r\nScript not found or already terminated\r\n\r\n"
+def handleStop(connectionSocket, path, runningProcesses):
     try:
+        # Print the contents of runningProcesses
+        print("BEFORE Processes:", runningProcesses)
+        # Iterate over the list of processes and terminate the one associated with the specified path
+        if path in runningProcesses:
+            print("Terminating")
+            runningProcesses[path].terminate()
+            del runningProcesses[path]
+            response = "OK\r\nTerminated the running process\r\n\r\n"
+        else:
+            print("ALL GOOD")
+            response = "FAIL\r\nProcess never was running or isn't running\r\n\r\n"
+
+        # Print the contents of runningProcesses
+        print("AFTER Processes:", runningProcesses)
+        
         connectionSocket.send(response.encode())
     except BrokenPipeError:
         pass
 
+    return runningProcesses
+
+
+        
+
 # Runs a single thread response in the server
-def runServerThread(connectionSocket, processes):
+def runServerThread(connectionSocket):
+    # running processes not staying throughout
+    runningProcesses = {}
     while True:
         # Buffer the request
         request = bufferRequest(connectionSocket)
@@ -179,12 +189,14 @@ def runServerThread(connectionSocket, processes):
 
         # If it is a GET request, send to handleGet
         if "RUN" in method:
-            handleRun(connectionSocket, file)
+            process, path = handleRun(connectionSocket, file)
+            runningProcesses[path] = process
         # If it is a HEAD request, send to handleHead
         elif "REPORT" in method:
             handleReport(connectionSocket, file)
-        else:
-            handleStop(connectionSocket, file, processes)
+        elif "STOP" in method:
+            print("BEFORE BEFORE Processes:", runningProcesses)
+            runningProcesses = handleStop(connectionSocket, file, runningProcesses)
 
 def main():
         # Get the command for what we are connecting to, throw an error if there is not command line argument
@@ -217,7 +229,7 @@ def main():
         for s in read:
             connectionSocket, addr = s.accept()
                 
-            p = Process(target=runServerThread, args=(connectionSocket, processes,))
+            p = Process(target=runServerThread, args=(connectionSocket,))
             p.start()
 
             processes.append(p)
