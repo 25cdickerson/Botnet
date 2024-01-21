@@ -17,7 +17,6 @@ def bufferMessages(sock):
     finalBuffer = ""
     # Parse into buffer
     while True:
-        print("buffering")
         chunk = sock.recv(1024).decode()
         if not chunk:
             break
@@ -59,11 +58,10 @@ def main():
 
                 try:
                     sock.connect((ip, int(port)))
-                    print(f"Connected to {ip}:{port}")
 
                     sock.send(message.encode())
 
-                    print("Response: " + bufferMessages(sock))
+                    print("Response: \n" + bufferMessages(sock))
 
                 except Exception as e:
                     print(f"Failed to connect to {ip}:{port}. Error: {e}")

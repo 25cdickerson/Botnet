@@ -12,19 +12,14 @@
 
 # Function that buffers the request from the command and control
 
-from asyncio import Lock
-from logging import Manager
-from multiprocessing import Process
+import json
+from threading import Lock
+from multiprocessing import Process, Manager
 import subprocess
 import os
 import select
 import socket
 import sys
-
-# Global dictionary for results and lock
-resultsDict = {}
-resultsLock = Lock()
-
 
 def bufferRequest(connectionSocket):
     finalBuffer = ""
@@ -56,34 +51,45 @@ def parseRequest(request):
 
     return method, file
     
-def runFile(path, resultsDict, resultsLock, port):
-    try:
-        # Use subprocess.run to capture the output of the script
-        result = subprocess.run(["./" + path], capture_output=True, text=True)
+import json
 
+def runFile(path, port, log_file="execution_log.txt"):
+    # Use subprocess.run to capture the output of the script
+    result = subprocess.run([path], capture_output=True, text=True)
+
+    if result.returncode == 0:
         # Assuming you want to capture both stdout and stderr
         output = result.stdout + result.stderr
 
-        # Check the return code
-        if result.returncode == 0:
-            # Use the lock to ensure thread-safe dictionary update
-            with resultsLock:
-                if port not in resultsDict:
-                    resultsDict[port] = {}
-                resultsDict[port][path] = output
-    except Exception as e:
-        # Handle exceptions, e.g., if the script couldn't be executed
-        with resultsLock:
-            if port not in resultsDict:
-                resultsDict[port] = {}
-            resultsDict[port][path] = f"Error executing script: {str(e)}"
+        # Log the execution information to a file in JSON format
+        log_data = {
+            "port": port,
+            "path": path,
+            "output": output,
+        }
+
+        with open(log_file, "r+") as log:
+            lines = log.readlines()
+            log.seek(0)
+            log.truncate()
+
+            # Write log data, overwriting if the same port and path are found
+            found = False
+            for line in lines:
+                entry = json.loads(line)
+                if entry["port"] == port and entry["path"] == path:
+                    log.write(json.dumps(log_data) + "\n")
+                    found = True
+                else:
+                    log.write(line)
+
+            if not found:
+                log.write(json.dumps(log_data) + "\n")
 
 
 
     
 def handleRun(connectionSocket, path):
-    print("running handleRun")
-
     # If the path exists and it is a file, go there
     if os.path.exists("./" + path) and os.path.isfile("./" + path):
 
@@ -91,7 +97,7 @@ def handleRun(connectionSocket, path):
         port = localAddress[1]
 
         # Run the file in a new thread
-        p = Process(target=runFile, args=("./" + path, resultsDict, resultsLock, port))
+        p = Process(target=runFile, args=("./" + path, port))
         p.start()
         
         # Fill out the response headers
@@ -111,6 +117,35 @@ def handleRun(connectionSocket, path):
         response = "FAIL\r\nFile not found\r\n\r\n"
         connectionSocket.send(response.encode())
 
+def handleReport(connectionSocket, path, logFile="execution_log.txt"):
+    localAddress = connectionSocket.getsockname()
+    port = localAddress[1]
+
+    print(f"Port: {port}, Path: {'./' + path}")
+
+    try:
+        # Read the log file and parse each line as JSON
+        with open(logFile, "r") as log:
+            for line in log:
+                logData = eval(line)
+                if logData["port"] == port and logData["path"] == "./" + path:
+                    responseHeaders = ["OK"]
+                    responseBody = f"Result retrieved:\n{logData['output']}"
+                    break
+            else:
+                responseHeaders = ["FAIL"]
+                responseBody = "Results not found"
+    except Exception as e:
+        responseHeaders = ["FAIL"]
+        responseBody = f"Error reading log file: {str(e)}"
+
+    # Form the response with the response body
+    response = "\r\n".join(responseHeaders) + "\r\n" + responseBody + "\r\n\r\n"
+
+    # Send the Response
+    connectionSocket.send(response.encode())
+
+
 
 # Runs a single thread response in the server
 def runServerThread(connectionSocket):
@@ -127,9 +162,9 @@ def runServerThread(connectionSocket):
         # If it is a GET request, send to handleGet
         if "RUN" in method:
             handleRun(connectionSocket, file)
-        # # If it is a HEAD request, send to handleHead
-        # elif "REPORT" in method:
-        #     handleReport(connectionSocket, file, connection)
+        # If it is a HEAD request, send to handleHead
+        elif "REPORT" in method:
+            handleReport(connectionSocket, file)
         # else:
         #     handleStop(connectionSocket, file, connection)
 
@@ -155,6 +190,7 @@ def main():
         serverSocket.listen(3)
         print(f"Server is listening at Port {serverPort}")
 
+
     processes = []
 
     # Use select to keep track of all server sockets
@@ -162,7 +198,7 @@ def main():
         read, _, _ = select.select(serverSockets, [], [], 5)  # '5' for non-blocking
         for s in read:
             connectionSocket, addr = s.accept()
-            
+                
             p = Process(target=runServerThread, args=(connectionSocket,))
             p.start()
 
