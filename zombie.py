@@ -21,6 +21,8 @@ import select
 import socket
 import sys
 
+import psutil
+
 def bufferRequest(connectionSocket):
     finalBuffer = ""
     # run the loop until no buffers are left or the carriage return new line character sequence is found
@@ -117,7 +119,8 @@ def handleRun(connectionSocket, path):
         response = "FAIL\r\nFile not found\r\n\r\n"
         connectionSocket.send(response.encode())
 
-    return p, path
+    # Return the information about the running process to (possibly) cancel
+    return p.pid, path
 
 def handleReport(connectionSocket, path, logFile="execution_log.txt"):
     localAddress = connectionSocket.getsockname()
@@ -149,34 +152,36 @@ def handleReport(connectionSocket, path, logFile="execution_log.txt"):
 
 def handleStop(connectionSocket, path, runningProcesses):
     try:
-        # Print the contents of runningProcesses
-        print("BEFORE Processes:", runningProcesses)
-        # Iterate over the list of processes and terminate the one associated with the specified path
+        # Check if the process ID is stored for the specified path
         if path in runningProcesses:
-            print("Terminating")
-            runningProcesses[path].terminate()
-            del runningProcesses[path]
-            response = "OK\r\nTerminated the running process\r\n\r\n"
-        else:
-            print("ALL GOOD")
-            response = "FAIL\r\nProcess never was running or isn't running\r\n\r\n"
+            process_id = runningProcesses[path]
+            
+            try:
+                # Terminate the process using the stored process ID
+                process = psutil.Process(process_id)
+                process.terminate()
 
-        # Print the contents of runningProcesses
-        print("AFTER Processes:", runningProcesses)
+                # Remove the entry from the dictionary
+                del runningProcesses[path]
+
+                response = "OK\r\nTerminated the running process\r\n\r\n"
+            except psutil.NoSuchProcess:
+                response = "FAIL\r\nProcess not found\r\n\r\n"
+        else:
+            response = "FAIL\r\nProcess never was running or isn't running\r\n\r\n"
         
         connectionSocket.send(response.encode())
     except BrokenPipeError:
         pass
 
+    # Update the running processes dictionary to not include that entry
     return runningProcesses
 
 
         
 
 # Runs a single thread response in the server
-def runServerThread(connectionSocket):
-    # running processes not staying throughout
-    runningProcesses = {}
+def runServerThread(connectionSocket, runningProcesses):
     while True:
         # Buffer the request
         request = bufferRequest(connectionSocket)
@@ -195,7 +200,6 @@ def runServerThread(connectionSocket):
         elif "REPORT" in method:
             handleReport(connectionSocket, file)
         elif "STOP" in method:
-            print("BEFORE BEFORE Processes:", runningProcesses)
             runningProcesses = handleStop(connectionSocket, file, runningProcesses)
 
 def main():
@@ -220,8 +224,14 @@ def main():
         serverSocket.listen(3)
         print(f"Server is listening at Port {serverPort}")
 
-
+    # Create an array to store the processes on each port
     processes = []
+
+    # Create a manager to manage shared data
+    manager = Manager()
+
+    # Create a shared dictionary for running processes
+    runningProcesses = manager.dict()
 
     # Use select to keep track of all server sockets
     while True:
@@ -229,9 +239,13 @@ def main():
         for s in read:
             connectionSocket, addr = s.accept()
                 
-            p = Process(target=runServerThread, args=(connectionSocket,))
+            p = Process(target=runServerThread, args=(connectionSocket, runningProcesses))
             p.start()
 
             processes.append(p)
+
+            # Close the connection socket after the thread completes
+            connectionSocket.close()
+
 
 main()
