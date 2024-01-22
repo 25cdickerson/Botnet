@@ -120,7 +120,7 @@ def handleRun(connectionSocket, path):
         connectionSocket.send(response.encode())
 
     # Return the information about the running process to (possibly) cancel
-    return p.pid, path
+    return p.pid, path, port
 
 def handleReport(connectionSocket, path, logFile="execution_log.txt"):
     localAddress = connectionSocket.getsockname()
@@ -152,30 +152,34 @@ def handleReport(connectionSocket, path, logFile="execution_log.txt"):
 
 def handleStop(connectionSocket, path, runningProcesses):
     try:
-        # Check if the process ID is stored for the specified path
-        if path in runningProcesses:
-            process_id = runningProcesses[path]
-            
+        localAddress = connectionSocket.getsockname()
+        port = localAddress[1]
+
+        # Check if the entry exists in the dictionary with the specified path and port
+        if (path, port) in runningProcesses:
+            process_id = runningProcesses[(path, port)]
+
             try:
                 # Terminate the process using the stored process ID
                 process = psutil.Process(process_id)
                 process.terminate()
 
                 # Remove the entry from the dictionary
-                del runningProcesses[path]
+                del runningProcesses[(path, port)]
 
                 response = "OK\r\nTerminated the running process\r\n\r\n"
             except psutil.NoSuchProcess:
                 response = "FAIL\r\nProcess not found\r\n\r\n"
         else:
             response = "FAIL\r\nProcess never was running or isn't running\r\n\r\n"
-        
+
         connectionSocket.send(response.encode())
     except BrokenPipeError:
         pass
 
     # Update the running processes dictionary to not include that entry
     return runningProcesses
+
 
 
         
@@ -194,8 +198,8 @@ def runServerThread(connectionSocket, runningProcesses):
 
         # If it is a GET request, send to handleGet
         if "RUN" in method:
-            process, path = handleRun(connectionSocket, file)
-            runningProcesses[path] = process
+            process, path, port = handleRun(connectionSocket, file)
+            runningProcesses[(path, port)] = process
         # If it is a HEAD request, send to handleHead
         elif "REPORT" in method:
             handleReport(connectionSocket, file)

@@ -67,6 +67,32 @@ def main():
                     print(f"Failed to connect to {ip}:{port}. Error: {e}")
                 finally:
                     sock.close()
+                
+                # If there are only two params, assume they want to send to every host at every port
+            elif len(parts) == 2:
+                method, scriptName = parts[0], parts[1]
+
+                message = method + " " + scriptName
+                message += "\r\n\r\n"
+
+                for ip in ipDictionary:
+                    for port in ipDictionary[ip]:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+                        print(ip + "->" + port)
+                        try:
+                            sock.connect((ip, int(port)))
+
+                            sock.send(message.encode())
+
+                            print("Response: \n" + bufferMessages(sock))
+
+                        except Exception as e:
+                            print(f"Failed to connect to {ip}:{port}. Error: {e}")
+                        finally:
+                            sock.close()
+
+
             else:
                 print("Invalid command format. Please use 'RUN/REPORT/STOP *.py <IP> <port>'.")
 
