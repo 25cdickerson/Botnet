@@ -71,9 +71,9 @@ def runFile(path, port, log_file="execution_log.txt"):
         }
 
         with open(log_file, "r+") as log:
+            log.flush()  # Ensure the buffer is flushed to the file
             lines = log.readlines()
             log.seek(0)
-            log.truncate()
 
             # Write log data, overwriting if the same port and path are found
             found = False

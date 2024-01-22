@@ -1,5 +1,3 @@
 {"port": 4000, "path": "./hello.py", "output": "hello\n"}
 {"port": 4001, "path": "./hello.py", "output": "hello\n"}
 {"port": 4002, "path": "./hello.py", "output": "hello\n"}
-{"port": 4000, "path": "./stopMe.py", "output": "stopMe.py finished\n"}
-{"port": 4002, "path": "./stopMe.py", "output": "stopMe.py finished\n"}
