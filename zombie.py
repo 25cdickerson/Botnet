@@ -185,10 +185,17 @@ def handleStop(connectionSocket, path, runningProcesses):
         
 
 # Runs a single thread response in the server
-def runServerThread(connectionSocket, runningProcesses):
+def runServerThread(connectionSocket, runningProcesses, DisconnectSignal):
     while True:
         # Buffer the request
         request = bufferRequest(connectionSocket)
+
+        if request == "DISCONNECT\r\n\r\n":
+            DisconnectSignal.set()
+
+        if DisconnectSignal.is_set():
+            print("Disconnect Signal Recieved")
+            return
 
         # Parse the request
         method, file = parseRequest(request)
@@ -207,7 +214,7 @@ def runServerThread(connectionSocket, runningProcesses):
             runningProcesses = handleStop(connectionSocket, file, runningProcesses)
 
 def main():
-        # Get the command for what we are connecting to, throw an error if there is not command line argument
+    # Get the command for what we are connecting to, throw an error if there is not command line argument
     if len(sys.argv) < 2:
         print("Please enter arguments like this: ./myserver.py <Port1> <Port2> <Port3>.")
         return
@@ -237,19 +244,27 @@ def main():
     # Create a shared dictionary for running processes
     runningProcesses = manager.dict()
 
+    # Create a disconnect event using the manager to handle all running processes
+    DisconnectSignal = manager.Event()
+
     # Use select to keep track of all server sockets
     while True:
         read, _, _ = select.select(serverSockets, [], [], 5)  # '5' for non-blocking
+        
         for s in read:
             connectionSocket, addr = s.accept()
                 
-            p = Process(target=runServerThread, args=(connectionSocket, runningProcesses))
+            p = Process(target=runServerThread, args=(connectionSocket, runningProcesses, DisconnectSignal))
             p.start()
 
             processes.append(p)
 
+            if DisconnectSignal == DisconnectSignal.is_set():
+                print("Disconnect signal hit")
+                return
+
             # Close the connection socket after the thread completes
-            connectionSocket.close()
+            connectionSocket.close()         
 
 
 main()

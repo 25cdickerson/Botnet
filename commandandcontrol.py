@@ -43,6 +43,24 @@ def main():
         command = input("Enter command (or 'DISCONNECT' to exit):\n")
         
         if command == "DISCONNECT":
+            mess =  "DISCONNECT\r\n\r\n"
+            for ip in ipDictionary:
+                    for port in ipDictionary[ip]:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+                        print("Disconnecting from: " + ip + "->" + port)
+                        try:
+                            sock.connect((ip, int(port)))
+
+                            sock.send(mess.encode())
+
+                            print(bufferMessages(sock))
+
+                        except Exception as e:
+                            print(f"Failed to disconnect from {ip}:{port}. Error: {e}")
+                        finally:
+                            sock.close()
+
             break
 
         # Assuming the command format is "RUN *.py <IP> <port>"
