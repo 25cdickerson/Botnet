@@ -20,6 +20,7 @@ import os
 import select
 import socket
 import sys
+import time
 
 import psutil
 
@@ -192,9 +193,6 @@ def runServerThread(connectionSocket, runningProcesses, DisconnectSignal):
 
         if request == "DISCONNECT\r\n\r\n":
             DisconnectSignal.set()
-
-        if DisconnectSignal.is_set():
-            print("Disconnect Signal Recieved")
             return
 
         # Parse the request
@@ -259,12 +257,16 @@ def main():
 
             processes.append(p)
 
-            if DisconnectSignal == DisconnectSignal.is_set():
-                print("Disconnect signal hit")
-                return
-
             # Close the connection socket after the thread completes
-            connectionSocket.close()         
+            connectionSocket.close() 
+        
+        if DisconnectSignal.is_set():
+            print("Disconnect signal hit")
+
+            for process in processes:
+                process.terminate()
+
+            return        
 
 
 main()

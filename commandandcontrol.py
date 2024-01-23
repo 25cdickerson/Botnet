@@ -44,22 +44,26 @@ def main():
         
         if command == "DISCONNECT":
             mess =  "DISCONNECT\r\n\r\n"
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
             for ip in ipDictionary:
-                    for port in ipDictionary[ip]:
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-                        print("Disconnecting from: " + ip + "->" + port)
-                        try:
-                            sock.connect((ip, int(port)))
+                port = ipDictionary[ip][0]
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-                            sock.send(mess.encode())
+                print("Disconnecting from: " + ip)
+                try:
+                    sock.connect((ip, int(port)))
 
-                            print(bufferMessages(sock))
+                    sock.send(mess.encode())
 
-                        except Exception as e:
-                            print(f"Failed to disconnect from {ip}:{port}. Error: {e}")
-                        finally:
-                            sock.close()
+                    print(bufferMessages(sock))
+
+                except Exception as e:
+                    print(f"Failed to disconnect from {ip}:{port}. Error: {e}")
+                finally:
+                    sock.close()
 
             break
 

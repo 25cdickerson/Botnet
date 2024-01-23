@@ -4,3 +4,6 @@
 {"port": 4000, "path": "./testDir/hello2.py", "output": "This is hello 2\nThis is awesome\n"}
 {"port": 4001, "path": "./testDir/hello2.py", "output": "This is hello 2\nThis is awesome\n"}
 {"port": 4002, "path": "./testDir/hello2.py", "output": "This is hello 2\nThis is awesome\n"}
+{"port": 4001, "path": "./stopMe.py", "output": "stopMe.py finished\n"}
+{"port": 4000, "path": "./stopMe.py", "output": "stopMe.py finished\n"}
+{"port": 4002, "path": "./stopMe.py", "output": "stopMe.py finished\n"}
