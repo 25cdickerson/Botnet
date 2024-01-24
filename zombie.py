@@ -46,7 +46,7 @@ def parseRequest(request):
     try:
         # Check if there are enough lines to proceed
         if len(lines) > 0:
-            # Get the method, path, and remaining parts
+            # Get the method, and file path
             method, file = lines[0], lines[1]
     except ValueError:
         method = None
@@ -61,7 +61,7 @@ def runFile(path, port, log_file="execution_log.txt"):
     result = subprocess.run([path], capture_output=True, text=True)
 
     if result.returncode == 0:
-        # Assuming you want to capture both stdout and stderr
+        # Capture both stdout and stderr
         output = result.stdout + result.stderr
 
         # Log the execution information to a file in JSON format
