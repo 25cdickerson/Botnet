@@ -140,7 +140,7 @@ def handleReport(connectionSocket, path, logFile="execution_log.txt"):
                     break
             else:
                 responseHeaders = ["FAIL"]
-                responseBody = "Results not found"
+                responseBody = "Results not found, pending run"
     except Exception as e:
         responseHeaders = ["FAIL"]
         responseBody = f"Error reading log file: {str(e)}"
