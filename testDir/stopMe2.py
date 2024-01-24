@@ -3,7 +3,7 @@
 import time
 
 def main():
-    time.sleep(20)
+    time.sleep(120)
     print("stopMe.py finished")
 
 if __name__ == "__main__":
