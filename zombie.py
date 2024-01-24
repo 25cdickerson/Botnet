@@ -217,6 +217,10 @@ def main():
         print("Please enter arguments like this: ./myserver.py <Port1> <Port2> <Port3>.")
         return
     
+    # Clear the log file
+    with open("execution_log.txt", "r+") as log:
+        log.truncate()
+    
     # Setup the server sockets
     serverSockets = [socket.socket(socket.AF_INET, socket.SOCK_STREAM) for _ in range(len(sys.argv)-1)]
     for i, serverSocket in enumerate(serverSockets):
