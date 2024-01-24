@@ -1,0 +1,2 @@
+{"port": 4000, "path": "./stopMe.py", "output": "stopMe.py finished\n"}
+{"port": 4001, "path": "./stopMe.py", "output": "stopMe.py finished\n"}

@@ -9,9 +9,6 @@
 #                                   #
 #####################################
 
-
-# Function that buffers the request from the command and control
-
 import json
 from threading import Lock
 from multiprocessing import Process, Manager
@@ -20,10 +17,9 @@ import os
 import select
 import socket
 import sys
-import time
-
 import psutil
 
+# Function that buffers the request from the command and control
 def bufferRequest(connectionSocket):
     finalBuffer = ""
     # run the loop until no buffers are left or the carriage return new line character sequence is found
@@ -43,6 +39,8 @@ def parseRequest(request):
     lines = request.split()
     method = ""
     file = ""
+
+    # If one of the values is not present, it is not a valid request
     try:
         # Check if there are enough lines to proceed
         if len(lines) > 0:
@@ -53,9 +51,8 @@ def parseRequest(request):
         file = None
 
     return method, file
-    
-import json
 
+# This function runs the file and logs the data
 def runFile(path, port, log_file="execution_log.txt"):
     # Use subprocess.run to capture the output of the script
     result = subprocess.run([path], capture_output=True, text=True)
@@ -86,16 +83,17 @@ def runFile(path, port, log_file="execution_log.txt"):
                 else:
                     log.write(line)
 
+            # If a previous log is not found, append it
             if not found:
                 log.write(json.dumps(log_data) + "\n")
 
 
 
-    
+# This function checks, then runs the file
 def handleRun(connectionSocket, path):
     # If the path exists and it is a file, go there
     if os.path.exists("./" + path) and os.path.isfile("./" + path):
-
+        # Get the port
         localAddress = connectionSocket.getsockname()
         port = localAddress[1]
 
@@ -121,13 +119,15 @@ def handleRun(connectionSocket, path):
         connectionSocket.send(response.encode())
 
     # Return the information about the running process to (possibly) cancel
-    return p.pid, path, port
+    # If the file was not found, p is not defined so send none
+    try:
+        return p.pid, path, port
+    except UnboundLocalError:
+        return None, None, None
 
-def handleReport(connectionSocket, path, logFile="execution_log.txt"):
+def handleReport(connectionSocket, path, runningProcesses, logFile="execution_log.txt"):
     localAddress = connectionSocket.getsockname()
     port = localAddress[1]
-
-    print(f"Port: {port}, Path: {'./' + path}")
 
     try:
         # Read the log file and parse each line as JSON
@@ -140,7 +140,12 @@ def handleReport(connectionSocket, path, logFile="execution_log.txt"):
                     break
             else:
                 responseHeaders = ["FAIL"]
-                responseBody = "Results not found, pending run"
+                
+                if (path, port) in runningProcesses:
+                    responseBody = "Script currently running, waiting for output."
+                else:
+                    responseBody = "Results not found, run the script to get output"
+
     except Exception as e:
         responseHeaders = ["FAIL"]
         responseBody = f"Error reading log file: {str(e)}"
@@ -165,14 +170,17 @@ def handleStop(connectionSocket, path, runningProcesses):
                 process = psutil.Process(process_id)
                 process.terminate()
 
-                # Remove the entry from the dictionary
-                del runningProcesses[(path, port)]
+                # Try catch to see if the race condition got to it first
+                try:
+                    del runningProcesses[(path, port)]
+                except KeyError:
+                    pass # Do nothing because the process has already been deleted
 
                 response = "OK\r\nTerminated the running process\r\n\r\n"
             except psutil.NoSuchProcess:
                 response = "FAIL\r\nProcess not found\r\n\r\n"
         else:
-            response = "FAIL\r\nProcess never was running or isn't running\r\n\r\n"
+            response = "FAIL\r\nScript is not running\r\n\r\n"
 
         connectionSocket.send(response.encode())
     except BrokenPipeError:
@@ -188,9 +196,23 @@ def handleStop(connectionSocket, path, runningProcesses):
 # Runs a single thread response in the server
 def runServerThread(connectionSocket, runningProcesses, DisconnectSignal):
     while True:
+        # Check if the running processes have completed
+        for (path, port), process_id in runningProcesses.items():
+            process = psutil.Process(process_id)
+            
+            # if the process is dead, scrub it from the dictionary
+            if process.status() == psutil.STATUS_ZOMBIE or process.status() == psutil.STATUS_DEAD:
+                # Remove the entry from the dictionary
+                # Try catch to see if the race condition got to it first
+                try:
+                    del runningProcesses[(path, port)]
+                except KeyError:
+                    pass # Do nothing because the process has already been deleted
+
         # Buffer the request
         request = bufferRequest(connectionSocket)
 
+        # If there is a Disconnection request, Signal running processes
         if request == "DISCONNECT\r\n\r\n":
             DisconnectSignal.set()
             return
@@ -198,16 +220,21 @@ def runServerThread(connectionSocket, runningProcesses, DisconnectSignal):
         # Parse the request
         method, file = parseRequest(request)
 
+        # If the correct information was not given, then don't bother doing anything else
         if method == None or file == None:
             continue
 
         # If it is a GET request, send to handleGet
         if "RUN" in method:
+            # Get the information of the running processes
             process, path, port = handleRun(connectionSocket, file)
-            runningProcesses[(path, port)] = process
+
+            # If the file was not found, then there is no need to add it to the dictionary
+            if process != None and path != None and port != None:
+                runningProcesses[(path, port)] = process
         # If it is a HEAD request, send to handleHead
         elif "REPORT" in method:
-            handleReport(connectionSocket, file)
+            handleReport(connectionSocket, file, runningProcesses)
         elif "STOP" in method:
             runningProcesses = handleStop(connectionSocket, file, runningProcesses)
 
@@ -264,6 +291,7 @@ def main():
             # Close the connection socket after the thread completes
             connectionSocket.close() 
         
+        # If there is a disconnection signal that hits, terminate the processes and end
         if DisconnectSignal.is_set():
             print("Disconnect signal hit")
 
