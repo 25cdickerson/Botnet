@@ -1,0 +1,6 @@
+# Ignore everything:
+testDir/hello2.py
+testDir/longOutput.py
+testDir/stopMe2.py
+hello.py
+stopMe.py
